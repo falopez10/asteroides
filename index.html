@@ -1,0 +1,401 @@
+<!--
+ * Copyright 2009, Google Inc.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ * notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ * copyright notice, this list of conditions and the following disclaimer
+ * in the documentation and/or other materials provided with the
+ * distribution.
+ *     * Neither the name of Google Inc. nor the names of its
+ * contributors may be used to endorse or promote products derived from
+ * this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Asteroides</title>
+<style>
+html, body {
+  width: 100%;
+  height: 100%;
+  border: 0px;
+  padding: 0px;
+  margin: 0px;
+  background-color: red;
+  font-family: sans-serif;
+  overflow: hidden;
+  color: #fff;
+}
+a {
+ color: #fff;
+}
+#info {
+  font-size: small;
+  position: absolute;
+  op: 0px; width: 100%;
+  padding: 5px;
+  text-align: center;
+  z-index: 2;
+}
+CANVAS {
+  background-color: gray;
+}
+.fpsContainer {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  color: white;
+  font-family: sans-serif;
+  background-color: rgba(0,0,0,0.5);
+  border-radius: 10px;
+  padding: 10px;
+}
+#viewContainer {
+  width: 100%;
+  height: 100%;
+}
+</style>
+<script type="text/javascript" src="./tdl/base.js"></script>
+<script type="text/javascript" src="./main.js">
+</script>
+</head>
+<body>
+<div class="fpsContainer">
+  <div class="fps">fps: <span id="fps"></div>
+  <div>Asteroides</div>
+  <div id="setCount0">1</div>
+</div>
+<div id="viewContainer">
+<canvas id="canvas" width="1024" height="1024" style="width: 100%; height: 100%;"></canvas>
+</div>
+</body>
+<script id="shieldVertexShader" type="text/something-not-javascript">
+attribute vec4 position;
+attribute vec2 texCoord;
+varying vec2 v_texCoord;
+uniform mat4 worldViewProjection;
+void main() {
+  v_texCoord = texCoord;
+  gl_Position = (worldViewProjection * position);
+}
+</script>
+<script id="shieldFragmentShader" type="text/something-not-javascript">
+#ifdef GL_ES
+precision mediump float;
+#endif
+varying vec2 v_texCoord;
+uniform sampler2D diffuseSampler;
+uniform vec4 colorMult;
+void main() {
+  gl_FragColor = texture2D(diffuseSampler, v_texCoord) * colorMult;
+}
+</script>
+<script id="shockwaveVertexShader" type="text/something-not-javascript">
+attribute vec4 position;
+attribute vec2 texCoord;
+varying vec2 v_texCoord;
+uniform mat4 worldViewProjection;
+void main() {
+  v_texCoord = texCoord;
+  gl_Position = (worldViewProjection * position);
+}
+</script>
+<script id="shockwaveFragmentShader" type="text/something-not-javascript">
+#ifdef GL_ES
+precision mediump float;
+#endif
+varying vec2 v_texCoord;
+uniform float voff;
+uniform float time;
+uniform vec4 colorMult;
+uniform sampler2D shieldGradient;
+uniform sampler2D shieldNoise;
+void main() {
+  vec4 grad = texture2D(shieldGradient,
+                        vec2(0, voff) + v_texCoord * vec2(2, 2)).rgbr;
+  vec4 noise1 = texture2D(shieldNoise,
+                          v_texCoord + vec2(time, time) * vec2(0.0, 0.3)).rgbr;
+  vec4 noise2 = texture2D(shieldNoise,
+                          v_texCoord + vec2(time, time) * vec2(0.0, 0.4)).rgbr;
+  gl_FragColor = grad * (noise1 * noise2) * colorMult;
+}
+</script>
+<script id="planetVertexShader" type="text/something-not-javascript">
+uniform mat4 worldViewProjection;
+uniform vec3 lightWorldPos;
+uniform mat4 world;
+uniform mat4 viewInverse;
+uniform mat4 worldInverseTranspose;
+attribute vec4 position;
+attribute vec3 normal;
+attribute vec2 texCoord;
+attribute vec3 tangent;
+attribute vec3 binormal;
+varying vec4 v_position;
+varying vec2 v_texCoord;
+varying vec3 v_tangent;
+varying vec3 v_binormal;
+varying vec3 v_normal;
+varying vec3 v_surfaceToLight;
+varying vec3 v_surfaceToView;
+void main() {
+  v_texCoord = texCoord;
+  v_position = (worldViewProjection * position);
+  v_normal = (worldInverseTranspose * vec4(normal, 0)).xyz;
+  v_surfaceToLight = lightWorldPos - (world * position).xyz;
+  v_surfaceToView = (viewInverse[3] - (world * position)).xyz;
+  v_binormal = (worldInverseTranspose * vec4(binormal, 0)).xyz;
+  v_tangent = (worldInverseTranspose * vec4(tangent, 0)).xyz;
+  gl_Position = v_position;
+}
+
+</script>
+<script id="planetFragmentShader" type="text/something-not-javascript">
+#ifdef GL_ES
+precision mediump float;
+#endif
+uniform vec4 lightColor;
+varying vec4 v_position;
+varying vec2 v_texCoord;
+varying vec3 v_tangent;
+varying vec3 v_binormal;
+varying vec3 v_normal;
+varying vec3 v_surfaceToLight;
+varying vec3 v_surfaceToView;
+
+uniform vec4 emissive;
+uniform vec4 ambient;
+uniform sampler2D diffuseSampler;
+uniform vec4 specular;
+uniform sampler2D bumpSampler;
+uniform float shininess;
+uniform float specularFactor;
+
+vec4 lit(float l ,float h, float m) {
+  return vec4(1.0,
+              max(l, 0.0),
+              (l > 0.0) ? pow(max(0.0, h), m) : 0.0,
+              1.0);
+}
+void main() {
+  vec4 diffuse = texture2D(diffuseSampler, v_texCoord);
+  mat3 tangentToWorld = mat3(v_tangent,
+                             v_binormal,
+                             v_normal);
+  vec3 tangentNormal = texture2D(bumpSampler, v_texCoord.xy).xyz -
+                                 vec3(0.5, 0.5, 0.5);
+  vec3 normal = (tangentToWorld * tangentNormal);
+  normal = normalize(normal);
+  vec3 surfaceToLight = normalize(v_surfaceToLight);
+  vec3 surfaceToView = normalize(v_surfaceToView);
+  vec3 halfVector = normalize(surfaceToLight + surfaceToView);
+  vec4 litR = lit(dot(normal, surfaceToLight),
+                    dot(normal, halfVector), shininess);
+  gl_FragColor = vec4((emissive +
+  lightColor * (ambient * diffuse + diffuse * litR.y +
+                        + specular * litR.z * specularFactor)).rgb,
+      diffuse.a);
+}
+</script>
+<script id="waterVertexShader" type="text/something-not-javascript">
+uniform mat4 worldViewProjection;
+uniform vec3 lightWorldPos;
+uniform mat4 world;
+uniform mat4 viewInverse;
+uniform mat4 worldInverseTranspose;
+attribute vec4 position;
+attribute vec3 normal;
+attribute vec2 texCoord;
+attribute vec3 tangent;
+attribute vec3 binormal;
+varying vec4 v_position;
+varying vec2 v_texCoord;
+varying vec3 v_tangent;
+varying vec3 v_binormal;
+varying vec3 v_normal;
+varying vec3 v_surfaceToLight;
+varying vec3 v_surfaceToView;
+void main() {
+  v_texCoord = texCoord;
+  v_position = (worldViewProjection * position);
+  v_normal = (worldInverseTranspose * vec4(normal, 0)).xyz;
+  v_surfaceToLight = lightWorldPos - (world * position).xyz;
+  v_surfaceToView = (viewInverse[3] - (world * position)).xyz;
+  v_binormal = (worldInverseTranspose * vec4(binormal, 0)).xyz;
+  v_tangent = (worldInverseTranspose * vec4(tangent, 0)).xyz;
+  gl_Position = v_position;
+}
+
+</script>
+<script id="waterFragmentShader" type="text/something-not-javascript">
+#ifdef GL_ES
+precision mediump float;
+#endif
+uniform vec4 lightColor;
+varying vec4 v_position;
+varying vec2 v_texCoord;
+varying vec3 v_tangent;
+varying vec3 v_binormal;
+varying vec3 v_normal;
+varying vec3 v_surfaceToLight;
+varying vec3 v_surfaceToView;
+
+uniform vec4 emissive;
+uniform vec4 ambient;
+uniform sampler2D diffuseSampler;
+uniform vec4 specular;
+uniform sampler2D bumpSampler;
+uniform float shininess;
+uniform float specularFactor;
+
+vec4 lit(float l ,float h, float m) {
+  return vec4(1.0,
+              max(l, 0.0),
+              (l > 0.0) ? pow(max(0.0, h), m) : 0.0,
+              1.0);
+}
+void main() {
+  vec4 diffuse = texture2D(diffuseSampler, v_texCoord);
+  mat3 tangentToWorld = mat3(v_tangent,
+                             v_binormal,
+                             v_normal);
+  vec3 tangentNormal = texture2D(bumpSampler, v_texCoord.xy).xyz -
+                                 vec3(0.5, 0.5, 0.5);
+  vec3 normal = (tangentToWorld * tangentNormal);
+  normal = normalize(normal);
+  vec3 surfaceToLight = normalize(v_surfaceToLight);
+  vec3 surfaceToView = normalize(v_surfaceToView);
+  vec3 halfVector = normalize(surfaceToLight + surfaceToView);
+  vec4 litR = lit(dot(normal, surfaceToLight),
+                    dot(normal, halfVector), shininess);
+  vec4 spec = specular * litR.z * specularFactor;
+  gl_FragColor = vec4((emissive +
+  lightColor * (ambient * diffuse + diffuse * litR.y +
+                        + spec)).rgb,
+      diffuse.a + spec.a);
+}
+</script>
+<script id="meteorVertexShader" type="text/something-not-javascript">
+uniform mat4 worldViewProjection;
+uniform vec3 lightWorldPos;
+uniform mat4 world;
+uniform mat4 viewInverse;
+uniform mat4 worldInverseTranspose;
+attribute vec4 position;
+attribute vec3 normal;
+attribute vec2 texCoord;
+attribute vec3 tangent;
+attribute vec3 binormal;
+varying vec4 v_position;
+varying vec2 v_texCoord;
+varying vec3 v_tangent;
+varying vec3 v_binormal;
+varying vec3 v_normal;
+varying vec3 v_surfaceToLight;
+varying vec3 v_surfaceToView;
+void main() {
+  v_texCoord = texCoord;
+  v_position = (worldViewProjection * position);
+  v_normal = (worldInverseTranspose * vec4(normal, 0)).xyz;
+  v_surfaceToLight = lightWorldPos - (world * position).xyz;
+  v_surfaceToView = (viewInverse[3] - (world * position)).xyz;
+  v_binormal = (worldInverseTranspose * vec4(binormal, 0)).xyz;
+  v_tangent = (worldInverseTranspose * vec4(tangent, 0)).xyz;
+  gl_Position = v_position;
+}
+
+</script>
+<script id="meteorFragmentShader" type="text/something-not-javascript">
+#ifdef GL_ES
+precision mediump float;
+#endif
+uniform vec4 lightColor;
+varying vec4 v_position;
+varying vec2 v_texCoord;
+varying vec3 v_tangent;
+varying vec3 v_binormal;
+varying vec3 v_normal;
+varying vec3 v_surfaceToLight;
+varying vec3 v_surfaceToView;
+
+uniform vec4 emissive;
+uniform vec4 ambient;
+uniform sampler2D diffuseSampler;
+uniform vec4 specular;
+uniform sampler2D bumpSampler;
+uniform float shininess;
+uniform float specularFactor;
+
+vec4 lit(float l ,float h, float m) {
+  return vec4(1.0,
+              max(l, 0.0),
+              (l > 0.0) ? pow(max(0.0, h), m) : 0.0,
+              1.0);
+}
+void main() {
+  vec4 diffuse = texture2D(diffuseSampler, v_texCoord);
+  mat3 tangentToWorld = mat3(v_tangent,
+                             v_binormal,
+                             v_normal);
+  vec3 tangentNormal = texture2D(bumpSampler, v_texCoord.xy).xyz -
+                                 vec3(0.5, 0.5, 0.5);
+  vec3 normal = (tangentToWorld * tangentNormal);
+  normal = normalize(normal);
+  vec3 surfaceToLight = normalize(v_surfaceToLight);
+  vec3 surfaceToView = normalize(v_surfaceToView);
+  vec3 halfVector = normalize(surfaceToLight + surfaceToView);
+  vec4 litR = lit(dot(normal, surfaceToLight),
+                    dot(normal, halfVector), shininess);
+  gl_FragColor = vec4((emissive +
+  lightColor * (ambient * diffuse + diffuse * litR.y +
+                        + specular * litR.z * specularFactor)).rgb,
+      diffuse.a);
+}
+</script>
+<!-- ===[ SkyBox ]============================================== -->
+<script id="skyboxVertexShader" type="text/something-not-javascript">
+attribute vec4 position;
+varying vec4 v_position;
+void main() {
+  v_position = position;
+  gl_Position = position;
+}
+</script>
+<script id="skyboxFragmentShader" type="text/something-not-javascript">
+#ifdef GL_ES
+precision mediump float;
+#endif
+uniform samplerCube skybox;
+uniform mat4 viewDirectionProjectionInverse;
+varying vec4 v_position;
+void main() {
+  vec4 t = (viewDirectionProjectionInverse * v_position);
+  vec4 color = textureCube(
+      skybox,
+      normalize(t.xyz / t.w));
+  gl_FragColor = color * color * color;
+}
+</script>
+</html>
+
+
