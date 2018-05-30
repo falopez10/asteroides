@@ -32,6 +32,10 @@ var clicked=false;
 var clickX=0;
 var clickY=0;
 var clickZ=0;
+var clickW=0;
+var clickA=0;
+var clickS=0;
+var clickD=0;
 
 //g_drawOnce = true;
 //g_debug = true;
@@ -345,11 +349,31 @@ function triggerExplosion(transNorm) {
 }
 
 function onKeyPress(event) {
-  if (event.charCode == 'd'.charCodeAt(0) ||
-      event.charCode == 'D'.charCodeAt(0)) {
+  if (event.charCode == 'q'.charCodeAt(0) ||
+      event.charCode == 'Q'.charCodeAt(0)) {
     console.log("presionado: "+event.charCode);
     g_showShockwave = !g_showShockwave;
   }
+  console.log("charCode",event.charCode);
+  if (event.charCode == "w".charCodeAt(0)||event.charCode == "W".charCodeAt(0) )
+    clickW=1;
+  if (event.charCode == "a".charCodeAt(0)||event.charCode == "A".charCodeAt(0) )
+    clickA=1;
+  if (event.charCode == "s".charCodeAt(0)||event.charCode == "S".charCodeAt(0) )
+    clickS=1;
+  if (event.charCode == "d".charCodeAt(0)||event.charCode == "D".charCodeAt(0) )
+    clickD=1;
+}
+
+function resetClicks(){
+  clicked=false;
+  clickX=0;
+  clickY=0;
+  clickZ=0;
+  clickW=0;
+  clickA=0;
+  clickS=0;
+  clickD=0;
 }
 
 function onClick(event){
@@ -685,10 +709,13 @@ function initialize() {
       var vector = meteorVector[ii];
       if(clicked)
       {
-        // clicked=false;
-        vector[0] = clickX*g_meteorDistance;
-        vector[1] = clickY*g_meteorDistance;
+        vector[0] = clickX;
+        vector[1] = clickY;
       }
+      if(clickW>0) vector[1]+=clickW*0.2;
+      if(clickA>0) vector[0]-=clickA*0.2;
+      if(clickS>0) vector[1]-=clickS*0.2;
+      if(clickD>0) vector[0]+=clickD*0.2;
       if (meteorTimer[ii] <= 0) {
         meteorActive[ii] = false;
         freeMeteors.push(ii);
@@ -719,7 +746,7 @@ function initialize() {
       fast.matrix4.transpose(worldInverseTranspose, worldInverse);
       
       meteor.draw(meteorPer);
-      clicked=false;
+      resetClicks();
 
     }
 
